@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GARA: LADDER_OS_STABLE</title>
+    <style>
+        :root { --bg: #050505; --accent: #d4af37; --border: #222; }
+        body { background: var(--bg); color: #ccc; font-family: monospace; margin: 0; padding: 10px; }
+        
+        .controls-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 20px; }
+        button { background: #111; border: 1px solid var(--border); color: var(--accent); padding: 8px; cursor: pointer; font-size: 0.7rem; }
+        
+        #ladder-container { width: 100%; max-width: 500px; margin: auto; border-left: 2px solid var(--border); padding-left: 15px; }
+        .rung { background: #080808; margin-bottom: 12px; padding: 12px; border: 1px solid var(--border); position: relative; }
+        
+        input, textarea { width: 100%; background: none; border: none; color: #fff; font-size: 0.85rem; outline: none; margin-bottom: 3px; }
+        .dt-input { color: var(--accent); font-weight: bold; }
+        .del-btn { color: #ff4444; font-size: 0.65rem; cursor: pointer; text-decoration: underline; text-align: left; }
+    </style>
+</head>
+<body>
+
+<div class="controls-grid">
+    <button onclick="addRung()">[+] إضافة</button>
+    <button onclick="sortAndSave()">حفظ وترتيب</button>
+    <button onclick="undo()">تراجع [< ]</button>
+    <button onclick="redo()">إعادة [ >]</button>
+    <button onclick="exportData()">Export</button>
+    <button onclick="document.getElementById('import-in').click()">Import</button>
+    <input type="file" id="import-in" style="display:none" onchange="importData(this)">
+</div>
+
+<div id="ladder-container"></div>
+
+<script>
+    let ladderData = JSON.parse(localStorage.getItem('gara_ladder')) || [];
+    let undoStack = [JSON.stringify(ladderData)];
+    let redoStack = [];
+
+    function saveState() { undoStack.push(JSON.stringify(ladderData)); redoStack = []; }
+
+    function addRung() {
+        saveState();
+        ladderData.push({ dt: new Date().toISOString().slice(0,16), title: '', note: '' });
+        render();
+    }
+
+    function render() {
+        const container = document.getElementById('ladder-container');
+        container.innerHTML = '';
+        ladderData.forEach((item, i) => {
+            const div = document.createElement('div');
+            div.className = 'rung';
+            // نستخدم onchange فقط لحفظ البيانات، لا نعيد تحميل القائمة
+            div.innerHTML = `
+                <input type="datetime-local" class="dt-input" value="${item.dt}" onchange="ladderData[${i}].dt=this.value">
+                <input type="text" placeholder="العنوان..." value="${item.title}" onchange="ladderData[${i}].title=this.value">
+                <textarea placeholder="الملاحظة..." onchange="ladderData[${i}].note=this.value">${item.note}</textarea>
+                <div class="del-btn" onclick="del(${i})">حذف المرحلة</div>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    function sortAndSave() {
+        saveState();
+        ladderData.sort((a, b) => new Date(a.dt) - new Date(b.dt));
+        localStorage.setItem('gara_ladder', JSON.stringify(ladderData));
+        render();
+    }
+
+    function undo() {
+        if (undoStack.length > 1) {
+            redoStack.push(undoStack.pop());
+            ladderData = JSON.parse(undoStack[undoStack.length - 1]);
+            render();
+        }
+    }
+
+    function redo() {
+        if (redoStack.length > 0) {
+            let nextState = redoStack.pop();
+            undoStack.push(nextState);
+            ladderData = JSON.parse(nextState);
+            render();
+        }
+    }
+
+    function del(i) { saveState(); ladderData.splice(i, 1); render(); }
+    function exportData() { const a = document.createElement('a'); a.href = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(ladderData)); a.download = 'GARA_LADDER.json'; a.click(); }
+    function importData(e) { const reader = new FileReader(); reader.onload = (event) => { saveState(); ladderData = JSON.parse(event.target.result); render(); }; reader.readAsText(e.target.files[0]); }
+
+    render();
+</script>
+</body>
+</html>
